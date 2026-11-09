@@ -46,70 +46,70 @@ const KNOWN_PREFIX: Pattern[] = [
   {
     type: "github-pat",
     severity: "HIGH",
-    regex: /\bgithub_pat_[A-Za-z0-9_]{20,}/g,
+    regex: /\bgithub_pat_[A-Za-z0-9_]{20,}/gd,
     valueGroup: 0,
     preview: tokenPreview,
   },
   {
     type: "github-token",
     severity: "HIGH",
-    regex: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}/g,
+    regex: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}/gd,
     valueGroup: 0,
     preview: tokenPreview,
   },
   {
     type: "openai-key",
     severity: "HIGH",
-    regex: /\bsk-proj-[A-Za-z0-9_-]{20,}/g,
+    regex: /\bsk-proj-[A-Za-z0-9_-]{20,}/gd,
     valueGroup: 0,
     preview: tokenPreview,
   },
   {
     type: "openai-key",
     severity: "HIGH",
-    regex: /\bsk-[A-Za-z0-9_-]{20,}/g,
+    regex: /\bsk-[A-Za-z0-9_-]{20,}/gd,
     valueGroup: 0,
     preview: tokenPreview,
   },
   {
     type: "aws-access-key",
     severity: "HIGH",
-    regex: /\bAKIA[0-9A-Z]{16}\b/g,
+    regex: /\bAKIA[0-9A-Z]{16}\b/gd,
     valueGroup: 0,
     preview: tokenPreview,
   },
   {
     type: "slack-token",
     severity: "HIGH",
-    regex: /\bxox[baprs]-[A-Za-z0-9-]{10,}/g,
+    regex: /\bxox[baprs]-[A-Za-z0-9-]{10,}/gd,
     valueGroup: 0,
     preview: tokenPreview,
   },
   {
     type: "npm-token",
     severity: "HIGH",
-    regex: /\bnpm_[A-Za-z0-9]{20,}/g,
+    regex: /\bnpm_[A-Za-z0-9]{20,}/gd,
     valueGroup: 0,
     preview: tokenPreview,
   },
   {
     type: "square-token",
     severity: "HIGH",
-    regex: /\bsq0at-[A-Za-z0-9_-]{10,}/g,
+    regex: /\bsq0at-[A-Za-z0-9_-]{10,}/gd,
     valueGroup: 0,
     preview: tokenPreview,
   },
   {
     type: "supabase-key",
     severity: "HIGH",
-    regex: /\bsbp_[A-Za-z0-9]{20,}/g,
+    regex: /\bsbp_[A-Za-z0-9]{20,}/gd,
     valueGroup: 0,
     preview: tokenPreview,
   },
   {
     type: "jwt",
     severity: "HIGH",
-    regex: /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
+    regex: /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/gd,
     valueGroup: 0,
     preview: tokenPreview,
   },
@@ -120,7 +120,7 @@ const STRUCTURED: Pattern[] = [
     // postgres://user:password@host - the value is the password only.
     type: "credential-url",
     severity: "HIGH",
-    regex: /([A-Za-z][A-Za-z0-9+.-]*):\/\/([^\s/:@]+):([^\s/@]+)@([^\s/]+)/g,
+    regex: /([A-Za-z][A-Za-z0-9+.-]*):\/\/([^\s/:@]+):([^\s/@]+)@([^\s/]+)/gd,
     valueGroup: 3,
     preview: (_value, m) => `${m[1]}://${m[2]}:****@${m[4]}`,
   },
@@ -128,7 +128,7 @@ const STRUCTURED: Pattern[] = [
     // curl -u user:password https://... / --user user:password
     type: "basic-auth-password",
     severity: "HIGH",
-    regex: /(?:^|\s)(?:-u|--user)[=\s]+([^\s:]+):([^\s]+)/g,
+    regex: /(?:^|\s)(?:-u|--user)[=\s]+([^\s:]+):([^\s]+)/gd,
     valueGroup: 2,
     preview: (_value, m) => `${m[1]}:****`,
   },
@@ -136,42 +136,42 @@ const STRUCTURED: Pattern[] = [
     // Authorization: Bearer <token> / Basic <credentials>
     type: "authorization-header",
     severity: "HIGH",
-    regex: /Authorization:\s*(?:Bearer|Basic)\s+([^\s"']+)/g,
+    regex: /Authorization:\s*(?:Bearer|Basic)\s+([^\s"']+)/gd,
     valueGroup: 1,
     preview: tokenPreview,
   },
   {
     type: "password-assignment",
     severity: "MEDIUM",
-    regex: /--password[=\s]+([^\s"']+)/g,
+    regex: /--password[=\s]+([^\s"']+)/gd,
     valueGroup: 1,
     preview: () => "--password=****",
   },
   {
     type: "password-assignment",
     severity: "MEDIUM",
-    regex: /\bPGPASSWORD[=\s]+([^\s"']+)/g,
+    regex: /\bPGPASSWORD[=\s]+([^\s"']+)/gd,
     valueGroup: 1,
     preview: () => "PGPASSWORD=****",
   },
   {
     type: "password-assignment",
     severity: "MEDIUM",
-    regex: /\bMYSQL_PWD[=\s]+([^\s"']+)/g,
+    regex: /\bMYSQL_PWD[=\s]+([^\s"']+)/gd,
     valueGroup: 1,
     preview: () => "MYSQL_PWD=****",
   },
   {
     type: "password-assignment",
     severity: "MEDIUM",
-    regex: /\bpassword[=:][ \t]*([^\s"']+)/g,
+    regex: /\bpassword[=:][ \t]*([^\s"']+)/gd,
     valueGroup: 1,
     preview: () => "password=****",
   },
   {
     type: "password-assignment",
     severity: "MEDIUM",
-    regex: /\bpasswd[=:][ \t]*([^\s"']+)/g,
+    regex: /\bpasswd[=:][ \t]*([^\s"']+)/gd,
     valueGroup: 1,
     preview: () => "passwd=****",
   },
@@ -179,7 +179,7 @@ const STRUCTURED: Pattern[] = [
     // sshpass -p <secret> / sshpass -p<secret>
     type: "password-assignment",
     severity: "MEDIUM",
-    regex: /\bsshpass\s+-p\s*([^\s"']+)/g,
+    regex: /\bsshpass\s+-p\s*([^\s"']+)/gd,
     valueGroup: 1,
     preview: () => "sshpass -p ****",
   },
@@ -187,7 +187,7 @@ const STRUCTURED: Pattern[] = [
     // mysql -p<secret> / mysql -p <secret> (mysql/psql-shaped only)
     type: "password-assignment",
     severity: "MEDIUM",
-    regex: /-p\s*([^\s"']+)/g,
+    regex: /-p\s*([^\s"']+)/gd,
     valueGroup: 1,
     preview: () => "-p ****",
   },
@@ -230,15 +230,19 @@ export function detectSecrets(command: string): RawFinding[] {
       const value = m[pattern.valueGroup];
       if (value === undefined || value.length === 0) continue;
       if (value === REDACTED) continue;
-      // Group 0 spans the whole match; for value groups compute the
-      // value offset inside the match.
+      // Group 0 spans the whole match. For a value group, take the
+      // capture group's own span (RegExp `d` flag): searching for the
+      // value text would find its FIRST occurrence, which is wrong
+      // when the value also appears earlier in the match - e.g.
+      // postgres://secret:secret@host must redact the password
+      // (second occurrence), not the username.
       let start: number;
       if (pattern.valueGroup === 0) {
         start = m.index;
       } else {
-        const before = command.indexOf(value, m.index);
-        if (before === -1 || before >= m.index + m[0].length) continue;
-        start = before;
+        const groupSpan = m.indices?.[pattern.valueGroup];
+        if (groupSpan === undefined) continue;
+        start = groupSpan[0];
       }
       const end = start + value.length;
       found.push({
@@ -257,7 +261,6 @@ export function detectSecrets(command: string): RawFinding[] {
   for (const p of STRUCTURED) {
     // The bare `-p` pattern only fires for mysql/psql-shaped commands,
     // so `grep -p` or `npm -p` never flags.
-    if (p.preview === undefined) continue;
     if (p.type === "password-assignment" && p.regex.source.startsWith("-p") && !isMysqlShaped) {
       continue;
     }

@@ -5,15 +5,19 @@
  * hook unless `--force`, in which case it chains: the old hook is saved
  * as `pre-commit.persistguard-old` and runs first). The hook runs
  * `persistguard scan` and blocks the commit on findings. It also
- * appends the two settings paths to the repo's `.gitignore` if absent
- * (repo-level, travels with the project - the exact fix for Claude
- * Code's global-excludes gap). Appending is idempotent.
+ * appends the two settings paths and `.claude/*.bak` to the repo's
+ * `.gitignore` if absent (repo-level, travels with the project - the
+ * exact fix for Claude Code's global-excludes gap). The `.bak` entry
+ * matters because `clean --write` leaves a backup holding the
+ * original secrets in plaintext next to the settings file; without
+ * it, that backup could be committed by accident. Appending is
+ * idempotent.
  */
 
 import { appendFileSync, chmodSync, copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-export const GITIGNORE_LINES = [".claude/settings.local.json", ".claude/settings.json"];
+export const GITIGNORE_LINES = [".claude/settings.local.json", ".claude/settings.json", ".claude/*.bak"];
 
 function hookScript(chained: boolean): string {
   const oldHook = chained
@@ -102,7 +106,7 @@ export function installHook(dir: string, opts: { force?: boolean } = {}): HookRe
   if (added.length > 0) {
     lines.push(`persistguard hook: added to .gitignore: ${added.join(", ")}`);
   } else {
-    lines.push("persistguard hook: .gitignore already lists both settings paths");
+    lines.push("persistguard hook: .gitignore already lists the settings paths and .bak entries");
   }
   return { exitCode: 0, lines };
 }

@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -54,13 +54,15 @@ test("clean dry-run: prints the plan, writes nothing, exit 0", () => {
   assert.equal(existsSync(join(dir, ".claude", "settings.local.json.bak")), false);
 });
 
-test("clean --write: rewrites secrets, keeps shape, writes .bak, scan is clean after", () => {
+test("clean --write: rewrites secrets, keeps shape, writes .bak, scan is clean once the .bak is deleted", () => {
   const dir = tmpProject();
   writeSettings(dir, LEAKY);
   const r = run(["clean", "--write", dir]);
   assert.equal(r.status, 0);
   assert.match(r.stdout, /redacted/);
   assert.match(r.stdout, /Rotation checklist/);
+  assert.match(r.stdout, /Delete the \.bak backup after rotating/);
+  assert.match(r.stdout, /settings\.local\.json\.bak/);
   const bak = join(dir, ".claude", "settings.local.json.bak");
   assert.ok(existsSync(bak), ".bak copy must exist");
   assert.ok(readFileSync(bak, "utf8").includes(DB_PASS), ".bak keeps the original bytes");
@@ -75,8 +77,17 @@ test("clean --write: rewrites secrets, keeps shape, writes .bak, scan is clean a
   assert.ok(after.permissions.allow[2].includes(PLACEHOLDER));
   assert.ok(!after.permissions.allow[2].includes(SK_TOKEN));
   assert.ok(!JSON.stringify(after).includes(DB_PASS));
+  // The rewritten file is clean, but the .bak still holds the original
+  // secrets, so scan fails until the backup is deleted (the documented
+  // flow: rotate, then delete the .bak, then scan again).
+  const blocked = run(["scan", dir]);
+  assert.equal(blocked.status, 1, `scan must fail while the .bak exists: ${blocked.stdout}`);
+  assert.match(blocked.stdout, /WARNING: 1 backup file/);
+  assert.ok(!blocked.stdout.includes(DB_PASS));
+  assert.ok(!blocked.stdout.includes(SK_TOKEN));
+  unlinkSync(bak);
   const scan = run(["scan", dir]);
-  assert.equal(scan.status, 0, `scan must be clean after clean --write: ${scan.stdout}`);
+  assert.equal(scan.status, 0, `scan must be clean after the .bak is deleted: ${scan.stdout}`);
 });
 
 test("clean --write on a clean project exits 0 and writes nothing", () => {

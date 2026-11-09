@@ -58,6 +58,21 @@ test("215-shape: password inside a command, no key format", () => {
   assert.equal(basic[0].value, BASIC_PASS);
 });
 
+test("credential URL: user == password redacts the password, not the username", () => {
+  // The value text occurs twice; the span must point at the password
+  // (second occurrence), so redaction keeps the username and removes
+  // the password.
+  const cmd = "psql postgres://secret:secret@host:5432/app";
+  const found = detectSecrets(cmd);
+  assert.equal(found.length, 1);
+  assert.equal(found[0].type, "credential-url");
+  assert.equal(found[0].value, "secret");
+  assert.equal(found[0].start, cmd.indexOf("secret", cmd.indexOf(":secret") + 1));
+  const redacted = redactText(cmd, found);
+  assert.equal(redacted, `psql postgres://secret:${REDACTED}@host:5432/app`);
+  assert.ok(redacted.startsWith("psql postgres://secret:"), "username must survive redaction");
+});
+
 test("password assignments: --password, env vars, password:, sshpass", () => {
   assert.equal(types(`deploy --password=${DB_PASS}`)[0], "password-assignment");
   assert.equal(types(`deploy --password ${DB_PASS}`)[0], "password-assignment");

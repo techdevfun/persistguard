@@ -35,13 +35,22 @@ export interface FileScan {
 
 export interface ScanResult {
   files: FileScan[];
+  /** `.bak` backups of settings files found in `.claude/` dirs. They
+   * hold the original (pre-redaction) secrets in plaintext, so a scan
+   * that finds one exits 1 until it is deleted (see findBakFiles). */
+  bakFiles: string[];
   totals: { files: number; rulesScanned: number; findings: number; high: number; medium: number };
 }
 
 const SETTINGS_FILE = /^settings(\.local)?\.json$/;
+// A `clean --write` backup: `<settings file>.bak`. It holds the full
+// original secrets, so it must never be committed - and it must never
+// be read for findings either (its contents are the pre-redaction
+// file); it is only listed, never opened.
+const BAK_FILE = /^settings(\.local)?\.json\.bak$/;
 const SKIP_DIRS = new Set(["node_modules", ".git"]);
 
-export function findSettingsFiles(dir: string): string[] {
+function walkFiles(dir: string, match: (fileName: string) => boolean): string[] {
   const found: string[] = [];
   const walk = (current: string): void => {
     let entries;
@@ -58,7 +67,7 @@ export function findSettingsFiles(dir: string): string[] {
       } else if (entry.isFile()) {
         // Only files that live directly inside a `.claude` directory.
         const parent = current.split("/").pop();
-        if (parent === ".claude" && SETTINGS_FILE.test(entry.name)) {
+        if (parent === ".claude" && match(entry.name)) {
           found.push(full);
         }
       }
@@ -67,6 +76,15 @@ export function findSettingsFiles(dir: string): string[] {
   walk(resolve(dir));
   found.sort();
   return found;
+}
+
+export function findSettingsFiles(dir: string): string[] {
+  return walkFiles(dir, (name) => SETTINGS_FILE.test(name));
+}
+
+/** `.bak` backups sitting next to settings files (listed, never read). */
+export function findBakFiles(dir: string): string[] {
+  return walkFiles(dir, (name) => BAK_FILE.test(name));
 }
 
 export function displayPath(dir: string, file: string): string {
@@ -141,11 +159,18 @@ export function scanFile(dir: string, file: string): FileScan {
 
 export function scanDir(dir: string, opts: { global?: boolean } = {}): ScanResult {
   const files = findSettingsFiles(dir);
+  const bakFiles = findBakFiles(dir).map((f) => displayPath(dir, f));
   if (opts.global) {
     const globalFile = join(homedir(), ".claude", "settings.json");
     if (existsSync(globalFile) && !files.includes(globalFile)) {
       files.push(globalFile);
       files.sort();
+    }
+    const globalBak = `${globalFile}.bak`;
+    if (existsSync(globalBak)) {
+      const display = displayPath(dir, globalBak);
+      if (!bakFiles.includes(display)) bakFiles.push(display);
+      bakFiles.sort();
     }
   }
   const scanned = files.map((f) => scanFile(dir, f));
@@ -156,7 +181,7 @@ export function scanDir(dir: string, opts: { global?: boolean } = {}): ScanResul
     high: scanned.reduce((n, f) => n + f.findings.filter((x) => x.severity === "HIGH").length, 0),
     medium: scanned.reduce((n, f) => n + f.findings.filter((x) => x.severity === "MEDIUM").length, 0),
   };
-  return { files: scanned, totals };
+  return { files: scanned, bakFiles, totals };
 }
 
 /** Run a git command in `dir`, returning stdout or null on failure. */

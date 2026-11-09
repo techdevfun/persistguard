@@ -13,7 +13,10 @@
  * history, and the tool says so.
  *
  * Always prints a rotation checklist afterwards: redaction is not
- * rotation, and it never un-leaks history.
+ * rotation, and it never un-leaks history. The checklist also names
+ * the `.bak` backup to delete after rotating - the backup still holds
+ * the original secrets in plaintext, and `scan` keeps failing until
+ * it is gone.
  */
 
 import { copyFileSync, readFileSync, writeFileSync } from "node:fs";
@@ -48,7 +51,7 @@ export interface CleanResult {
   error?: string;
 }
 
-export function rotationChecklist(types: string[]): string[] {
+export function rotationChecklist(types: string[], bakFiles: string[] = []): string[] {
   const lines = [
     "Rotation checklist - redaction does not un-leak history:",
     "  Rotate or revoke every credential listed above. If the file was",
@@ -61,6 +64,13 @@ export function rotationChecklist(types: string[]): string[] {
       0,
       ...types.map((t) => `  - ${t}: rotate/revoke this credential`),
     );
+  }
+  if (bakFiles.length > 0) {
+    // The .bak holds the ORIGINAL secrets in plaintext. Say so
+    // plainly, and name the files: the user must delete them after
+    // rotating, or the secret they just redacted is still on disk.
+    lines.push("  Delete the .bak backup after rotating - it still holds the original secrets:");
+    for (const b of bakFiles) lines.push(`    ${b}`);
   }
   return lines;
 }
@@ -255,6 +265,7 @@ export function cleanDir(dir: string, opts: { write?: boolean; force?: boolean }
     results.push({ file: p.display, findings: p.publicFindings, tracked: p.tracked, changed: true, bak: `${p.display}.bak` });
   }
   lines.unshift(`persistguard clean --write: ${totals.findings} finding(s) redacted in ${results.filter((r) => r.changed).length} file(s)`);
-  lines.push(...rotationChecklist(types));
+  const bakFiles = results.filter((r) => r.changed && r.bak !== null).map((r) => r.bak as string);
+  lines.push(...rotationChecklist(types, bakFiles));
   return { mode, files: results, totals, types, exitCode: 0, lines };
 }

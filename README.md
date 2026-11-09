@@ -10,8 +10,10 @@ walks the `permissions.allow` list rule by rule, and detects secrets
 typed *inside approved commands* - the exact shape both big generic
 scanners miss. Then it closes the loop: `history` checks git,
 `clean` rewrites the secret values out, and `hook` installs a
-pre-commit gate plus the repo-level `.gitignore` entry that Claude
-Code's own protection never writes.
+pre-commit gate plus the repo-level `.gitignore` entries that Claude
+Code's own protection never writes - for the settings files and for
+their `.bak` backups, which still hold the original secrets after
+a rewrite.
 
 ![demo](demo/demo.gif)
 
@@ -69,10 +71,13 @@ persistguard history .
 persistguard clean .
 
 # Rewrite the secrets out (backup .bak first; refuses tracked files
-# without --force - rewriting a tracked file does not un-leak history)
+# without --force - rewriting a tracked file does not un-leak history).
+# After rotating, delete the .bak backup: it still holds the original
+# secrets, and scan keeps failing until it is gone.
 persistguard clean --write .
 
-# Install the pre-commit gate + repo .gitignore fix
+# Install the pre-commit gate + repo .gitignore fix (settings files
+# and their .claude/*.bak backups)
 persistguard hook install .
 ```
 
@@ -95,8 +100,15 @@ persistguard scan: examples/demo-project
 1 file(s), 5 rule(s), 2 finding(s) (2 HIGH, 0 MEDIUM)
 ```
 
+The fixture is tracked by git in this repo, so a plain `clean --write`
+refuses it (rewriting a tracked file does not un-leak history).
+`--force` is safe here because every credential in the fixture is
+synthetic and labelled `FAKE` - on a file that held a real secret,
+rotate the credential first, and never `--force` a file you have not
+rotated yet.
+
 ```sh
-$ persistguard clean --write examples/demo-project
+$ persistguard clean --write --force examples/demo-project
 persistguard clean --write: 2 finding(s) redacted in 1 file(s)
 .claude/settings.local.json: 2 finding(s) redacted (backup: .claude/settings.local.json.bak)
 Rotation checklist - redaction does not un-leak history:
@@ -105,10 +117,21 @@ Rotation checklist - redaction does not un-leak history:
   Rotate or revoke every credential listed above. If the file was
   ever committed, the secret lives in git history: rotate it and
   rewrite history with git filter-repo (this tool does not do that).
+  Delete the .bak backup after rotating - it still holds the original secrets:
+    .claude/settings.local.json.bak
 
+$ rm examples/demo-project/.claude/settings.local.json.bak
 $ persistguard scan examples/demo-project
 1 file(s), 5 rule(s), 0 finding(s) (0 HIGH, 0 MEDIUM)
 ```
+
+The `rm` step is part of the flow, not cleanup: the `.bak` backup
+holds the original secrets in plaintext, so `scan` keeps failing
+(and the pre-commit hook keeps blocking) until it is deleted. The
+hook's `.gitignore` fix also covers `.claude/*.bak`, so a backup can
+never be committed by accident - but only deleting it removes the
+secret from the disk. Restore the fixture afterwards with
+`git checkout -- examples/demo-project`.
 
 ## What it detects
 

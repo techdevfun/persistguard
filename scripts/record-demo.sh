@@ -13,6 +13,11 @@
 # deleted at the end of this script; the fixture in examples/ is
 # never touched. Every credential in the fixture is synthetic and
 # labelled FAKE.
+#
+# The .bak step is part of the demo, not cleanup: `clean --write`
+# leaves a backup holding the original secrets, and `scan` keeps
+# failing (exit 1) until it is deleted - so the demo deletes it
+# before the final scan, exactly as the README worked example does.
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -58,6 +63,7 @@ run_screen "$BIN scan demo/.work/demo-project"
 run_screen "$BIN history demo/.work/demo-project"
 run_screen "$BIN clean --write demo/.work/demo-project"
 run_screen "$BIN clean --write --force demo/.work/demo-project"
+run_screen "rm demo/.work/demo-project/.claude/settings.local.json.bak"
 run_screen "$BIN scan demo/.work/demo-project"
 
 {

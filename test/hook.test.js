@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -37,6 +37,9 @@ test("hook install: fresh install writes an executable hook and the .gitignore f
   const gitignore = readFileSync(join(dir, ".gitignore"), "utf8");
   assert.ok(gitignore.includes(".claude/settings.local.json"));
   assert.ok(gitignore.includes(".claude/settings.json"));
+  // The .bak backup holds the original secrets, so the .gitignore fix
+  // must cover it too - otherwise `git add -A` would commit it.
+  assert.ok(gitignore.includes(".claude/*.bak"));
 });
 
 test("hook install: refuses to overwrite an existing hook without --force", () => {
@@ -80,11 +83,51 @@ test("hook install --force: chains the old hook and the gate blocks a leaky comm
   assert.ok(readFileSync(join(dir, "hook-log.txt"), "utf8").includes("old-hook-ran"), "old hook must run first");
   assert.ok(!attempt.stdout.includes(SK_TOKEN) && !attempt.stderr.includes(SK_TOKEN));
 
-  // After cleaning, the same commit goes through.
+  // After cleaning, the commit is still blocked while the .bak exists:
+  // the backup holds the original secrets, so scan fails until it is
+  // deleted (rotate, then delete the .bak, then commit).
   const clean = run(["clean", "--write", "--force", dir]);
   assert.equal(clean.status, 0, clean.stdout + clean.stderr);
+  const stillBlocked = spawnSync("git", ["-C", dir, "commit", "-m", "still blocked"], { encoding: "utf8", env });
+  assert.notEqual(stillBlocked.status, 0, "commit must stay blocked while the .bak exists");
+  assert.match(stillBlocked.stderr + stillBlocked.stdout, /commit blocked/);
+  unlinkSync(join(dir, ".claude", "settings.local.json.bak"));
   const ok = spawnSync("git", ["-C", dir, "commit", "-m", "clean"], { encoding: "utf8", env });
   assert.equal(ok.status, 0, ok.stdout + ok.stderr);
+});
+
+test("hook install: a .bak cannot be committed after hook install", () => {
+  const dir = gitRepo();
+  const r = run(["hook", "install", dir]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  // A leftover backup from `clean --write`, next to a clean settings file.
+  writeFileSync(
+    join(dir, ".claude", "settings.local.json"),
+    JSON.stringify({ permissions: { allow: ["Bash(npm test *)"] } }),
+  );
+  writeFileSync(
+    join(dir, ".claude", "settings.local.json.bak"),
+    JSON.stringify({ permissions: { allow: [`Bash(curl ${SK_TOKEN})`] } }),
+  );
+  writeFileSync(join(dir, "README.md"), "hello\n");
+  // (1) `git add -A` must not stage the .bak: the .gitignore fix covers it.
+  const addAll = spawnSync("git", ["-C", dir, "add", "-A"], { encoding: "utf8" });
+  assert.equal(addAll.status, 0);
+  const status = execFileSync("git", ["-C", dir, "status", "--porcelain"], { encoding: "utf8" });
+  assert.ok(!status.includes("settings.local.json.bak"), "the .bak must not be staged by git add -A");
+  // (2) Even force-adding it, the hook blocks the commit: scan fails
+  // while a .bak exists, and the .bak contents are never printed.
+  const binDir = mkdtempSync(join(tmpdir(), "persistguard-bin-"));
+  writeFileSync(join(binDir, "persistguard"), `#!/bin/sh\nexec node ${CLI} "$@"\n`);
+  chmodSync(join(binDir, "persistguard"), 0o755);
+  const env = { ...process.env, PATH: `${binDir}:${process.env.PATH}` };
+  execFileSync("git", ["-C", dir, "add", "-f", ".claude/settings.local.json.bak"]);
+  const attempt = spawnSync("git", ["-C", dir, "commit", "-m", "bak"], { encoding: "utf8", env });
+  assert.notEqual(attempt.status, 0, "committing a .bak must be blocked");
+  assert.match(attempt.stderr + attempt.stdout, /commit blocked/);
+  assert.ok(!attempt.stdout.includes(SK_TOKEN) && !attempt.stderr.includes(SK_TOKEN));
+  const commits = execFileSync("git", ["-C", dir, "rev-list", "--all", "--count"], { encoding: "utf8" });
+  assert.equal(commits.trim(), "0", "no commit holding the .bak must exist");
 });
 
 test("hook install is idempotent on .gitignore", () => {
@@ -94,8 +137,10 @@ test("hook install is idempotent on .gitignore", () => {
   const gitignore = readFileSync(join(dir, ".gitignore"), "utf8");
   const localCount = gitignore.split("\n").filter((l) => l === ".claude/settings.local.json").length;
   const sharedCount = gitignore.split("\n").filter((l) => l === ".claude/settings.json").length;
+  const bakCount = gitignore.split("\n").filter((l) => l === ".claude/*.bak").length;
   assert.equal(localCount, 1);
   assert.equal(sharedCount, 1);
+  assert.equal(bakCount, 1);
 });
 
 test("hook install outside a git repo exits 2", () => {

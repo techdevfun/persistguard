@@ -36,6 +36,11 @@ Rotation checklist - redaction does not un-leak history:
   Rotate or revoke every credential listed above. If the file was
   ever committed, the secret lives in git history: rotate it and
   rewrite history with git filter-repo (this tool does not do that).
+  Delete the .bak backup after rotating - it still holds the original secrets:
+    .claude/settings.local.json.bak
+[exit code: 0]
+
+$ rm demo/.work/demo-project/.claude/settings.local.json.bak
 [exit code: 0]
 
 $ persistguard scan demo/.work/demo-project

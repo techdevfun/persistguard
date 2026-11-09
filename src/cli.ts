@@ -8,9 +8,9 @@
  *   clean [--write] [--force] [dir] [--format json]
  *   hook install [dir] [--force]
  *
- * Exit codes: 0 = clean / inside policy; 1 = findings (scan),
- * tracked-or-ever-committed (history), or hook would block;
- * 2 = usage or environment error.
+ * Exit codes: 0 = clean / inside policy; 1 = findings or a leftover
+ * .bak backup (scan), tracked-or-ever-committed (history), or hook
+ * would block; 2 = usage or environment error.
  *
  * Never prints a secret value anywhere, including JSON output.
  * Previews show at most the first 4 + last 2 characters of a token,
@@ -36,6 +36,7 @@ Usage:
 
 Commands:
   scan     Find .claude/settings*.json files and flag secret-bearing allow rules.
+           Also warns about .bak backups next to them - a .bak still holds the original secrets.
   history  Check whether a settings file is tracked or was ever committed.
   clean    Redact detected secrets from settings files (dry run by default).
   hook     Install a pre-commit gate plus the repo-level .gitignore fix.
@@ -97,10 +98,22 @@ function printScanTable(result: ScanResult, dir: string): void {
   console.log(
     `${t.files} file(s), ${t.rulesScanned} rule(s), ${t.findings} finding(s) (${t.high} HIGH, ${t.medium} MEDIUM)`,
   );
+  if (result.bakFiles.length > 0) {
+    // A .bak holds the ORIGINAL secrets in plaintext. Name the files
+    // (never their contents) and fail the scan, so the pre-commit
+    // hook blocks the commit until the backup is deleted.
+    console.log(
+      `WARNING: ${result.bakFiles.length} backup file(s) still hold the original (pre-redaction) secrets:`,
+    );
+    for (const b of result.bakFiles) {
+      console.log(`  ${b}`);
+    }
+    console.log("Delete each .bak after rotating the credentials it contains - it is not protected by the scan.");
+  }
 }
 
 function scanExitCode(result: ScanResult): number {
-  if (result.totals.findings > 0) return 1;
+  if (result.totals.findings > 0 || result.bakFiles.length > 0) return 1;
   if (result.files.some((f) => f.error)) return 2;
   return 0;
 }

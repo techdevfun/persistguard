@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, unlinkSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -111,12 +111,38 @@ test("walker only ever opens .claude/settings*.json (no general scanning)", () =
   writeFileSync(join(dir, "README.md"), `token ${GH_TOKEN}\n`);
   writeFileSync(join(dir, ".claude", "notes.txt"), `token ${GH_TOKEN}\n`);
   writeFileSync(join(dir, ".claude", "other.json"), JSON.stringify({ token: GH_TOKEN }));
-  writeFileSync(join(dir, ".claude", "settings.local.json.bak"), JSON.stringify({ permissions: { allow: [`Bash(curl ${GH_TOKEN})`] } }));
   mkdirSync(join(dir, "sub"), { recursive: true });
   writeFileSync(join(dir, "sub", "leak.txt"), GH_TOKEN);
   const r = run(["scan", dir]);
   assert.equal(r.status, 0, `decoy files must not be scanned: ${r.stdout}`);
   assert.match(r.stdout, /0 finding\(s\)/);
+});
+
+test("scan: a .bak next to a settings file warns and exits 1, without ever reading it", () => {
+  const dir = tmpProject();
+  writeSettings(dir, { permissions: { allow: ["Bash(npm test *)"] } });
+  // The .bak holds a secret-shaped value, but scan must only LIST it:
+  // its contents are the pre-redaction file and must never be opened.
+  writeFileSync(
+    join(dir, ".claude", "settings.local.json.bak"),
+    JSON.stringify({ permissions: { allow: [`Bash(curl ${GH_TOKEN})`] } }),
+  );
+  const r = run(["scan", dir]);
+  assert.equal(r.status, 1, `scan must fail while a .bak exists: ${r.stdout}`);
+  assert.match(r.stdout, /0 finding\(s\)/);
+  assert.match(r.stdout, /WARNING: 1 backup file/);
+  assert.match(r.stdout, /settings\.local\.json\.bak/);
+  assert.match(r.stdout, /Delete each \.bak/);
+  assert.ok(!r.stdout.includes(GH_TOKEN), "scan must never print the .bak contents");
+  const json = run(["scan", "--format", "json", dir]);
+  assert.equal(json.status, 1);
+  const out = JSON.parse(json.stdout);
+  assert.deepEqual(out.bakFiles, [".claude/settings.local.json.bak"]);
+  assert.ok(!json.stdout.includes(GH_TOKEN));
+  // Deleting the .bak clears the scan.
+  unlinkSync(join(dir, ".claude", "settings.local.json.bak"));
+  const clean = run(["scan", dir]);
+  assert.equal(clean.status, 0, `scan must be clean once the .bak is gone: ${clean.stdout}`);
 });
 
 test("walker finds settings files in nested .claude dirs", () => {
