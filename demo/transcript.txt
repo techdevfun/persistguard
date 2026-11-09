@@ -1,0 +1,48 @@
+### TITLE: persistguard - the secret your agent persisted
+
+$ persistguard scan demo/.work/demo-project
+persistguard scan: demo/.work/demo-project
+.claude/settings.local.json (5 rule(s))
+  [HIGH] credential-url  rule #1 (allow)  Bash(psql postgres://app:<REDACTED-BY-PERSISTGUARD>@db.internal:5432/app -c "select 1")  (preview: postgres://app:****@db.internal:5432)
+  [HIGH] openai-key  rule #2 (allow)  Bash(curl -H "Authorization: Bearer <REDACTED-BY-PERSISTGUARD>" https://api.example.com/health)  (preview: sk-F...89)
+1 file(s), 5 rule(s), 2 finding(s) (2 HIGH, 0 MEDIUM)
+[exit code: 1]
+
+$ persistguard history demo/.work/demo-project
+persistguard history: demo/.work/demo-project
+.claude/settings.local.json  tracked: yes  ever committed: yes (1 commit(s), oldest 2026-11-09)
+A settings file is tracked or was ever committed - the secret lives in git history even after the file is deleted. Rotate the credentials and rewrite history with git filter-repo.
+[exit code: 1]
+
+$ persistguard clean --write demo/.work/demo-project
+persistguard clean: refused - these files are tracked by git:
+  .claude/settings.local.json
+Rewriting a tracked file does not un-leak history.
+Re-run with --force if you understand that, or remove the file from git first.
+Rotation checklist - redaction does not un-leak history:
+  - credential-url: rotate/revoke this credential
+  - openai-key: rotate/revoke this credential
+  Rotate or revoke every credential listed above. If the file was
+  ever committed, the secret lives in git history: rotate it and
+  rewrite history with git filter-repo (this tool does not do that).
+[exit code: 2]
+
+$ persistguard clean --write --force demo/.work/demo-project
+persistguard clean --write: 2 finding(s) redacted in 1 file(s)
+.claude/settings.local.json: 2 finding(s) redacted (backup: .claude/settings.local.json.bak)
+Rotation checklist - redaction does not un-leak history:
+  - credential-url: rotate/revoke this credential
+  - openai-key: rotate/revoke this credential
+  Rotate or revoke every credential listed above. If the file was
+  ever committed, the secret lives in git history: rotate it and
+  rewrite history with git filter-repo (this tool does not do that).
+[exit code: 0]
+
+$ persistguard scan demo/.work/demo-project
+persistguard scan: demo/.work/demo-project
+.claude/settings.local.json (5 rule(s))
+1 file(s), 5 rule(s), 0 finding(s) (0 HIGH, 0 MEDIUM)
+[exit code: 0]
+
+### END: persistguard 0.1.0 - MIT - github.com/techdevfun/persistguard
+

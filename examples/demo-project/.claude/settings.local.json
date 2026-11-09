@@ -1,0 +1,1 @@
+{"permissions":{"allow":["Bash(npm test *)","Bash(psql postgres://app:FAKEdbpass987654321@db.internal:5432/app -c \"select 1\")","Bash(curl -H \"Authorization: Bearer sk-FAKE0123456789abcdefghij0123456789\" https://api.example.com/health)"],"ask":["Bash(git push)"],"deny":["Bash(rm -rf /)"]}}
